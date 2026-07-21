@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pypdf
+pytesseract
+pdf2image
+chromadb
+sentence-transformers
+networkx
+python-dotenv
+anthropic
+python-multipart
+google-generativeai
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart

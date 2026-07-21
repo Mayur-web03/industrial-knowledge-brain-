@@ -4,3 +4,67 @@ __pycache__/
 *.pyc
 data/raw_docs/*
 !data/raw_docs/.gitkeep
+node_modules/
+dist/
+.env
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# Database
+backend/*.db
+
+# Chroma
+data/processed/*/chroma_db/
+
+# ZIP files
+*.zip
+
+# Models
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# Temporary files
+*.log
+
+# Virtual environment
+backend/venv/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# Database
+backend/*.db
+
+# Chroma
+chroma_db/
+data/processed/
+data/raw_docs/
+
+# ngrok
+backend/ngrok.exe
+*.exe
+
+# ZIP files
+*.zip
+
+# Node
+frontend/node_modules/
+
+# Python
+__pycache__/
+*.pyc
