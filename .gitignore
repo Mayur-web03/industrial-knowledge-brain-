@@ -1,70 +1,52 @@
-node_modules/
-.env
-__pycache__/
-*.pyc
-data/raw_docs/*
-!data/raw_docs/.gitkeep
-node_modules/
-dist/
-.env
+# =========================
 # Python
+# =========================
 backend/venv/
 __pycache__/
 *.pyc
 
+# =========================
 # Node
+# =========================
+node_modules/
 frontend/node_modules/
+dist/
 
+# =========================
 # Environment
+# =========================
 .env
 backend/.env
 frontend/.env
 
+# =========================
 # Database
+# =========================
 backend/*.db
 
-# Chroma
-data/processed/*/chroma_db/
+# =========================
+# Chroma / Processed Data
+# =========================
+chroma_db/
+data/processed/
 
-# ZIP files
+# Keep raw_docs if you want sample PDFs in GitHub.
+# If you DON'T want PDFs on GitHub, uncomment the next line:
+# data/raw_docs/
+
+# =========================
+# Large files
+# =========================
 *.zip
-
-# Models
 *.gguf
 *.bin
 *.safetensors
 *.pt
 *.pth
-
-# Temporary files
-*.log
-
-# Virtual environment
-backend/venv/
-
-# Environment
-.env
-backend/.env
-frontend/.env
-
-# Database
-backend/*.db
-
-# Chroma
-chroma_db/
-data/processed/
-data/raw_docs/
-
-# ngrok
-backend/ngrok.exe
 *.exe
 
-# ZIP files
-*.zip
-
-# Node
-frontend/node_modules/
-
-# Python
-__pycache__/
-*.pyc
+# =========================
+# Misc
+# =========================
+*.log
+backend/ngrok.exe
