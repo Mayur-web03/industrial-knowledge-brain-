@@ -260,9 +260,9 @@ def health_check():
 @app.post("/upload")
 async def upload_documents(
     files: List[UploadFile] = File(...),
+    user: dict = Depends(get_current_user),
 ):
-    # Fixed industry code hackathon ke liye (agar tera folder name 'IND001' na ho to yahan change kar lena)
-    industry_code = "IND001" 
+    industry_code = user["industry_code"]
     
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
