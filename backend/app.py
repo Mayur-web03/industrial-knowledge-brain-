@@ -2,6 +2,7 @@ import io
 import json
 import os
 import sys
+import base64
 from datetime import datetime, timezone
 from typing import List
 
@@ -12,6 +13,10 @@ from pydantic import BaseModel
 
 from pypdf import PdfReader
 from docx import Document as DocxDocument
+
+# Google API Imports
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 from database import Base, engine
 from auth.auth_routes import router as auth_router
@@ -40,8 +45,7 @@ app.include_router(auth_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# --- Per-industry pipeline/vector-store cache (avoid re-loading the
-#     embedding model on every request — expensive) ---
+# --- Per-industry pipeline/vector-store cache ---
 _pipeline_cache: dict[str, RAGPipeline] = {}
 _vector_store_cache: dict[str, VectorStoreManager] = {}
 
@@ -173,10 +177,6 @@ def extract_text(filename: str, content: bytes) -> str:
 # ---------- Knowledge-graph build helper ----------
 
 def _extend_knowledge_graph(industry_code: str, documents: dict):
-    """
-    Runs entity extraction on each newly-uploaded document and merges the
-    result into the industry's persisted knowledge graph.
-    """
     processed_dir = get_processed_dir(industry_code)
     graph_path = os.path.join(processed_dir, "knowledge_graph.json")
     entities_path = os.path.join(processed_dir, "all_entities.json")
@@ -211,16 +211,10 @@ def _extend_knowledge_graph(industry_code: str, documents: dict):
 
 
 def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
-    """
-    Document delete hone par uski entities aur graph-nodes bhi remove
-    karta hai, taaki delete kiya hua doc knowledge graph me "ghost"
-    entry ki tarah na reh jaye.
-    """
     processed_dir = get_processed_dir(industry_code)
     graph_path = os.path.join(processed_dir, "knowledge_graph.json")
     entities_path = os.path.join(processed_dir, "all_entities.json")
 
-    # entities file se hatao
     if os.path.exists(entities_path):
         try:
             with open(entities_path, "r") as f:
@@ -231,7 +225,6 @@ def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
         except (json.JSONDecodeError, FileNotFoundError):
             pass
 
-    # graph se hatao (agar builder me support hai)
     if os.path.exists(graph_path):
         kg = KnowledgeGraphBuilder()
         try:
@@ -242,11 +235,26 @@ def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
             else:
                 print(
                     f"KnowledgeGraphBuilder has no remove_document() — "
-                    f"graph nodes from '{filename}' were left as-is. "
-                    f"Run POST /graph/rebuild to fully clean up."
+                    f"graph nodes from '{filename}' were left as-is."
                 )
         except Exception as e:
             print(f"Could not update graph after deleting {filename}: {e}")
+
+
+# ---------- Helper: Gmail Service Connection ----------
+
+def get_gmail_service():
+    token_path = os.path.join(BASE_DIR, "token.json")
+    if not os.path.exists(token_path):
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail token.json file is missing on server. Authenticate Gmail first."
+        )
+    creds = Credentials.from_authorized_user_file(
+        token_path, 
+        ["https://www.googleapis.com/auth/gmail.readonly"]
+    )
+    return build("gmail", "v1", credentials=creds)
 
 
 # ---------- Public (no auth needed) ----------
@@ -255,14 +263,14 @@ def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
 def health_check():
     return {"status": "ok", "message": "Industrial Nexus API is running"}
 
-# ---------- Upload Endpoint (Hackathon Bypass: Public access with fixed industry) ----------
+
+# ---------- Upload Endpoint ----------
 
 @app.post("/upload")
 async def upload_documents(
     files: List[UploadFile] = File(...),
 ):
     industry_code = "IND0009"
-    
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
 
@@ -300,12 +308,12 @@ async def upload_documents(
         for filename in documents:
             _register_document(industry_code, filename, status="indexed")
 
-        # Build/update the knowledge graph for these newly uploaded docs.
         _extend_knowledge_graph(industry_code, documents)
 
     return {"results": results}
 
-# ---------- Protected endpoints (industry-scoped) ----------
+
+# ---------- Protected endpoints ----------
 
 @app.post("/ask", response_model=QueryResponse)
 def ask_question(request: QueryRequest, user: dict = Depends(get_current_user)):
@@ -348,9 +356,6 @@ def cascade_risk(node_id: str, depth: int = 2, user: dict = Depends(get_current_
     return get_cascading_risk(node_id, user["industry_code"], max_depth=depth)
 
 
-# Fixed: was hardcoded to "IND001" and had no auth dependency, so every
-# logged-in user (regardless of industry) saw IND001's document list.
-# Also removed the duplicate @app.get("/documents") decorator.
 @app.get("/documents")
 def list_documents(user: dict = Depends(get_current_user)):
     return {
@@ -369,13 +374,6 @@ def get_file(filename: str, user: dict = Depends(get_current_user)):
 
 @app.delete("/documents/{filename}")
 def delete_document(filename: str, user: dict = Depends(get_current_user)):
-    """
-    Document ko poori tarah remove karta hai:
-    1. Disk se raw PDF/DOCX/TXT file
-    2. Chroma vector store se uske embeddings/chunks
-    3. Knowledge graph se uski entities
-    4. documents_metadata.json se entry
-    """
     industry_code = user["industry_code"]
     safe_filename = os.path.basename(filename)
 
@@ -385,30 +383,19 @@ def delete_document(filename: str, user: dict = Depends(get_current_user)):
     if not os.path.exists(file_path):
         raise HTTPException(404, "File not found")
 
-    # 1. Disk se delete
     try:
         os.remove(file_path)
     except OSError as e:
         raise HTTPException(500, f"Could not delete file from disk: {e}")
 
-    # 2. Vector store se delete
     vector_store = get_vector_store_for_industry(industry_code)
     if hasattr(vector_store, "delete_document"):
         try:
             vector_store.delete_document(safe_filename)
         except Exception as e:
             print(f"Vector store cleanup failed for {safe_filename}: {e}")
-    else:
-        print(
-            f"VectorStoreManager has no delete_document() — embeddings for "
-            f"'{safe_filename}' still exist in Chroma. Add a delete_document "
-            f"method to embedder.py (e.g. collection.delete(where={{'source': filename}}))."
-        )
 
-    # 3. Knowledge graph se delete
     _remove_document_from_knowledge_graph(industry_code, safe_filename)
-
-    # 4. Metadata se delete
     _remove_document_metadata(industry_code, safe_filename)
 
     return {"status": "deleted", "filename": safe_filename}
@@ -416,10 +403,6 @@ def delete_document(filename: str, user: dict = Depends(get_current_user)):
 
 @app.post("/graph/rebuild")
 def rebuild_graph(user: dict = Depends(get_current_user)):
-    """
-    One-time backfill: re-runs entity extraction over every document already
-    on disk for this industry and rebuilds the graph from scratch.
-    """
     industry_code = user["industry_code"]
     raw_docs_dir = get_raw_docs_dir(industry_code)
 
@@ -450,11 +433,83 @@ def rebuild_graph(user: dict = Depends(get_current_user)):
     return {"status": "rebuilt", "count": len(documents)}
 
 
+# ---------- ACTUAL GMAIL SYNC IMPLEMENTATION ----------
+
 @app.post("/gmail/sync")
 async def gmail_sync(user: dict = Depends(get_current_user)):
-    # Yaha tera Gmail sync code chalega — abhi ye sirf stub hai,
-    # actual Gmail OAuth + fetch logic implement karna baaki hai.
-    return {
-        "success": True,
-        "message": "Gmail sync completed"
-    }
+    """
+    1. Authenticated user ka industry_code retrieve karta hai.
+    2. Gmail API se PDF attachments waale emails fetch karta hai.
+    3. PDFs ko disk par save karta hai.
+    4. Text extract karke Vector Store + Knowledge Graph ko update karta hai.
+    """
+    industry_code = user["industry_code"]
+    raw_docs_dir = get_raw_docs_dir(industry_code)
+    vector_store = get_vector_store_for_industry(industry_code)
+
+    try:
+        service = get_gmail_service()
+        
+        # Search for messages containing PDF attachments
+        query = "has:attachment filename:pdf"
+        results = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
+        messages = results.get("messages", [])
+
+        if not messages:
+            return {
+                "success": True,
+                "message": "No new emails with PDF attachments found.",
+                "synced_files": []
+            }
+
+        synced_documents = {}
+        synced_filenames = []
+
+        for msg_ref in messages:
+            msg_id = msg_ref["id"]
+            message = service.users().messages().get(userId="me", id=msg_id).execute()
+            payload = message.get("payload", {})
+            parts = payload.get("parts", [])
+
+            for part in parts:
+                filename = part.get("filename")
+                body = part.get("body", {})
+                attachment_id = body.get("attachmentId")
+
+                if filename and filename.lower().endswith(".pdf") and attachment_id:
+                    # Fetch attachment bytes
+                    attachment = service.users().messages().attachments().get(
+                        userId="me", messageId=msg_id, id=attachment_id
+                    ).execute()
+                    
+                    file_bytes = base64.urlsafe_b64decode(attachment["data"].encode("UTF-8"))
+                    safe_filename = os.path.basename(filename)
+                    
+                    # 1. Save raw file to disk
+                    dest_path = os.path.join(raw_docs_dir, safe_filename)
+                    with open(dest_path, "wb") as f:
+                        f.write(file_bytes)
+
+                    # 2. Extract Text
+                    try:
+                        text = extract_text(safe_filename, file_bytes)
+                        if text.strip():
+                            synced_documents[safe_filename] = text
+                            synced_filenames.append(safe_filename)
+                            _register_document(industry_code, safe_filename, status="indexed")
+                    except Exception as ext_err:
+                        print(f"Could not extract text from {safe_filename}: {ext_err}")
+
+        # 3. Update Vector Store & Knowledge Graph
+        if synced_documents:
+            vector_store.add_documents(synced_documents)
+            _extend_knowledge_graph(industry_code, synced_documents)
+
+        return {
+            "success": True,
+            "message": f"Successfully synced {len(synced_filenames)} PDF(s) from Gmail.",
+            "synced_files": synced_filenames
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gmail sync failed: {str(e)}")
