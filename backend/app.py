@@ -38,20 +38,15 @@ app = FastAPI(title="Industrial Nexus API")
 # Isliye explicit Vercel URL aur localhost origins setup kiye hain.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=[
+        "https://industrial-knowledge-brain.vercel.app",
+        "https://industrial-knowledge-brain-git-main-mayur-web03s-projects.vercel.app",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.include_router(auth_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
