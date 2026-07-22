@@ -33,11 +33,12 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Industrial Nexus API")
 
-# ---------- FIXED CORS MIDDLEWARE CONFIGURATION ----------
-# Note: allow_credentials=True ke saath "*" (wildcard) invalid hai, isliye explicit origins add kiye hain.
+# ---------- FIXED CORS CONFIGURATION ----------
+# allow_credentials=True ke saath wildcard '*' invalid hota hai.
+# Isliye explicit Vercel URL aur localhost origins setup kiye hain.
 allowed_origins = [
     "https://industrial-knowledge-brain.vercel.app",
-    "http://localhost:5173",  # Vite local dev server
+    "http://localhost:5173",  # Local Vite Server
     "http://localhost:3000",
 ]
 
@@ -48,7 +49,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ---------------------------------------------------------
 
 app.include_router(auth_router)
 
@@ -103,7 +103,7 @@ class QueryResponse(BaseModel):
     compliance_gaps: list[dict] = []
 
 
-# ---------- Document metadata helpers (per-industry) ----------
+# ---------- Document metadata helpers ----------
 
 def _bootstrap_metadata_from_raw_docs(industry_code: str, records: list[dict]) -> list[dict]:
     raw_docs_dir = get_raw_docs_dir(industry_code)
@@ -241,11 +241,6 @@ def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
             if hasattr(kg, "remove_document"):
                 kg.remove_document(filename)
                 kg.save_graph(graph_path)
-            else:
-                print(
-                    f"KnowledgeGraphBuilder has no remove_document() — "
-                    f"graph nodes from '{filename}' were left as-is."
-                )
         except Exception as e:
             print(f"Could not update graph after deleting {filename}: {e}")
 
@@ -257,7 +252,7 @@ def get_gmail_service():
     if not os.path.exists(token_path):
         raise HTTPException(
             status_code=400,
-            detail="Gmail token.json file is missing on server. Authenticate Gmail first."
+            detail="Gmail token.json file is missing on server."
         )
     creds = Credentials.from_authorized_user_file(
         token_path, 
@@ -276,9 +271,7 @@ def health_check():
 # ---------- Document Upload Endpoint ----------
 
 @app.post("/upload")
-async def upload_documents(
-    files: List[UploadFile] = File(...),
-):
+async def upload_documents(files: List[UploadFile] = File(...)):
     industry_code = "IND0009"
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
@@ -395,14 +388,14 @@ def delete_document(filename: str, user: dict = Depends(get_current_user)):
     try:
         os.remove(file_path)
     except OSError as e:
-        raise HTTPException(500, f"Could not delete file from disk: {e}")
+        raise HTTPException(500, f"Could not delete file: {e}")
 
     vector_store = get_vector_store_for_industry(industry_code)
     if hasattr(vector_store, "delete_document"):
         try:
             vector_store.delete_document(safe_filename)
         except Exception as e:
-            print(f"Vector store cleanup failed for {safe_filename}: {e}")
+            print(f"Vector store cleanup failed: {e}")
 
     _remove_document_from_knowledge_graph(industry_code, safe_filename)
     _remove_document_metadata(industry_code, safe_filename)
@@ -425,7 +418,7 @@ def rebuild_graph(user: dict = Depends(get_current_user)):
         try:
             documents[fname] = extract_text(fname, content)
         except Exception as e:
-            print(f"Skipping {fname} during rebuild: {e}")
+            print(f"Skipping {fname}: {e}")
 
     if not documents:
         return {"status": "no_documents", "count": 0}
@@ -446,11 +439,6 @@ def rebuild_graph(user: dict = Depends(get_current_user)):
 
 @app.post("/gmail/sync")
 async def gmail_sync(user: dict = Depends(get_current_user)):
-    """
-    1. Industry code retrieve karke Gmail se PDF attachments waale emails fetch karta hai.
-    2. PDFs ko destination folder par save karta hai.
-    3. Text extract karke Vector Store + Knowledge Graph ko update karta hai.
-    """
     industry_code = user["industry_code"]
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
@@ -458,7 +446,6 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
     try:
         service = get_gmail_service()
         
-        # Search for messages with PDF attachments
         query = "has:attachment filename:pdf"
         results = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
         messages = results.get("messages", [])
@@ -485,7 +472,6 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                 attachment_id = body.get("attachmentId")
 
                 if filename and filename.lower().endswith(".pdf") and attachment_id:
-                    # Fetch attachment raw bytes
                     attachment = service.users().messages().attachments().get(
                         userId="me", messageId=msg_id, id=attachment_id
                     ).execute()
@@ -493,12 +479,10 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                     file_bytes = base64.urlsafe_b64decode(attachment["data"].encode("UTF-8"))
                     safe_filename = os.path.basename(filename)
                     
-                    # Save raw file
                     dest_path = os.path.join(raw_docs_dir, safe_filename)
                     with open(dest_path, "wb") as f:
                         f.write(file_bytes)
 
-                    # Extract Text
                     try:
                         text = extract_text(safe_filename, file_bytes)
                         if text.strip():
@@ -508,7 +492,6 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                     except Exception as ext_err:
                         print(f"Could not extract text from {safe_filename}: {ext_err}")
 
-        # Update Vector Store & Knowledge Graph
         if synced_documents:
             vector_store.add_documents(synced_documents)
             _extend_knowledge_graph(industry_code, synced_documents)
