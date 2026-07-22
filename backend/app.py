@@ -262,7 +262,7 @@ async def upload_documents(
     files: List[UploadFile] = File(...),
     user: dict = Depends(get_current_user),
 ):
-    industry_code = user["industry_code"]
+    industry_code = "IND0009"
     
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
