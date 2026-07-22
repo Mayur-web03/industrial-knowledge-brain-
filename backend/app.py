@@ -33,13 +33,22 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Industrial Nexus API")
 
+# ---------- FIXED CORS MIDDLEWARE CONFIGURATION ----------
+# Note: allow_credentials=True ke saath "*" (wildcard) invalid hai, isliye explicit origins add kiye hain.
+allowed_origins = [
+    "https://industrial-knowledge-brain.vercel.app",
+    "http://localhost:5173",  # Vite local dev server
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# ---------------------------------------------------------
 
 app.include_router(auth_router)
 
@@ -257,14 +266,14 @@ def get_gmail_service():
     return build("gmail", "v1", credentials=creds)
 
 
-# ---------- Public (no auth needed) ----------
+# ---------- Public Endpoints ----------
 
 @app.get("/")
 def health_check():
     return {"status": "ok", "message": "Industrial Nexus API is running"}
 
 
-# ---------- Upload Endpoint ----------
+# ---------- Document Upload Endpoint ----------
 
 @app.post("/upload")
 async def upload_documents(
@@ -313,7 +322,7 @@ async def upload_documents(
     return {"results": results}
 
 
-# ---------- Protected endpoints ----------
+# ---------- Protected Endpoints ----------
 
 @app.post("/ask", response_model=QueryResponse)
 def ask_question(request: QueryRequest, user: dict = Depends(get_current_user)):
@@ -433,15 +442,14 @@ def rebuild_graph(user: dict = Depends(get_current_user)):
     return {"status": "rebuilt", "count": len(documents)}
 
 
-# ---------- ACTUAL GMAIL SYNC IMPLEMENTATION ----------
+# ---------- GMAIL SYNC ENDPOINT ----------
 
 @app.post("/gmail/sync")
 async def gmail_sync(user: dict = Depends(get_current_user)):
     """
-    1. Authenticated user ka industry_code retrieve karta hai.
-    2. Gmail API se PDF attachments waale emails fetch karta hai.
-    3. PDFs ko disk par save karta hai.
-    4. Text extract karke Vector Store + Knowledge Graph ko update karta hai.
+    1. Industry code retrieve karke Gmail se PDF attachments waale emails fetch karta hai.
+    2. PDFs ko destination folder par save karta hai.
+    3. Text extract karke Vector Store + Knowledge Graph ko update karta hai.
     """
     industry_code = user["industry_code"]
     raw_docs_dir = get_raw_docs_dir(industry_code)
@@ -450,7 +458,7 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
     try:
         service = get_gmail_service()
         
-        # Search for messages containing PDF attachments
+        # Search for messages with PDF attachments
         query = "has:attachment filename:pdf"
         results = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
         messages = results.get("messages", [])
@@ -477,7 +485,7 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                 attachment_id = body.get("attachmentId")
 
                 if filename and filename.lower().endswith(".pdf") and attachment_id:
-                    # Fetch attachment bytes
+                    # Fetch attachment raw bytes
                     attachment = service.users().messages().attachments().get(
                         userId="me", messageId=msg_id, id=attachment_id
                     ).execute()
@@ -485,12 +493,12 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                     file_bytes = base64.urlsafe_b64decode(attachment["data"].encode("UTF-8"))
                     safe_filename = os.path.basename(filename)
                     
-                    # 1. Save raw file to disk
+                    # Save raw file
                     dest_path = os.path.join(raw_docs_dir, safe_filename)
                     with open(dest_path, "wb") as f:
                         f.write(file_bytes)
 
-                    # 2. Extract Text
+                    # Extract Text
                     try:
                         text = extract_text(safe_filename, file_bytes)
                         if text.strip():
@@ -500,7 +508,7 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                     except Exception as ext_err:
                         print(f"Could not extract text from {safe_filename}: {ext_err}")
 
-        # 3. Update Vector Store & Knowledge Graph
+        # Update Vector Store & Knowledge Graph
         if synced_documents:
             vector_store.add_documents(synced_documents)
             _extend_knowledge_graph(industry_code, synced_documents)
