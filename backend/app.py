@@ -256,11 +256,14 @@ def health_check():
     return {"status": "ok", "message": "Industrial Nexus API is running"}
 
 
-# ---------- Unauthenticated Upload Endpoint ----------
+# ---------- Upload Endpoint (now industry-scoped via auth) ----------
 
 @app.post("/upload")
-async def upload_documents(files: List[UploadFile] = File(...)):
-    industry_code = "IND001"  # Agar aapka folder name alag hai toh yahan badal dein
+async def upload_documents(
+    files: List[UploadFile] = File(...),
+    user: dict = Depends(get_current_user),
+):
+    industry_code = user["industry_code"]
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
 
@@ -347,11 +350,13 @@ def cascade_risk(node_id: str, depth: int = 2, user: dict = Depends(get_current_
     return get_cascading_risk(node_id, user["industry_code"], max_depth=depth)
 
 
+# Fixed: was hardcoded to "IND001" and had no auth dependency, so every
+# logged-in user (regardless of industry) saw IND001's document list.
+# Also removed the duplicate @app.get("/documents") decorator.
 @app.get("/documents")
-@app.get("/documents")
-def list_documents():
+def list_documents(user: dict = Depends(get_current_user)):
     return {
-        "documents": _load_metadata("IND001")
+        "documents": _load_metadata(user["industry_code"])
     }
 
 
@@ -449,7 +454,8 @@ def rebuild_graph(user: dict = Depends(get_current_user)):
 
 @app.post("/gmail/sync")
 async def gmail_sync(user: dict = Depends(get_current_user)):
-    # Yaha tera Gmail sync code chalega
+    # Yaha tera Gmail sync code chalega — abhi ye sirf stub hai,
+    # actual Gmail OAuth + fetch logic implement karna baaki hai.
     return {
         "success": True,
         "message": "Gmail sync completed"
