@@ -266,7 +266,24 @@ def debug_list_docs():
             if os.path.isdir(industry_path):
                 result["industries"][industry] = os.listdir(industry_path)
     return result
+@app.get("/debug/tree")
+def debug_tree():
+    def walk(path, depth=0, max_depth=3):
+        if depth > max_depth:
+            return "..."
+        try:
+            items = {}
+            for entry in sorted(os.listdir(path)):
+                full = os.path.join(path, entry)
+                if os.path.isdir(full):
+                    items[entry + "/"] = walk(full, depth + 1, max_depth)
+                else:
+                    items[entry] = "file"
+            return items
+        except Exception as e:
+            return f"error: {e}"
 
+    return {"cwd": os.getcwd(), "tree": walk(os.getcwd())}
 # ---------- Upload Endpoint (now industry-scoped via auth) ----------
 
 @app.post("/upload")
