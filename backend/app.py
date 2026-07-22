@@ -260,7 +260,6 @@ def health_check():
 @app.post("/upload")
 async def upload_documents(
     files: List[UploadFile] = File(...),
-    user: dict = Depends(get_current_user),
 ):
     industry_code = "IND0009"
     
