@@ -1,8 +1,10 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE || "http://localhost:8000").replace(/\/+$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE || "http://localhost:8000").replace(/\/+$/, "");
+const GMAIL_API_BASE = (import.meta.env.VITE_GMAIL_API_BASE || API_BASE_URL).replace(/\/+$/, "");
 
-console.log("ENV =", import.meta.env.VITE_API_BASE);
-console.log("API =", API_BASE_URL);
+console.log("ENV VITE_API_BASE =", import.meta.env.VITE_API_BASE);
+console.log("ENV VITE_GMAIL_API_BASE =", import.meta.env.VITE_GMAIL_API_BASE);
+console.log("API BASE =", API_BASE_URL);
+console.log("GMAIL API BASE =", GMAIL_API_BASE);
 
 function authHeaders() {
   const token = localStorage.getItem("ikb-token");
@@ -69,20 +71,25 @@ export function logoutUser() {
   window.location.href = "/login.html";
 }
 
-// ---- Data / Graph / Chat / Sync Endpoints ----
+// ---- Gmail Sync Endpoint (Uses dedicated GMAIL_API_BASE) ----
 
 export async function syncGmail() {
-  const res = await fetch(`${API_BASE_URL}/gmail/sync`, {
+  const res = await fetch(`${GMAIL_API_BASE}/gmail/sync`, {
     method: "POST",
     headers: { ...authHeaders() },
   });
+
   handleAuthFailure(res);
+
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || `/gmail/sync failed: ${res.status}`);
+    throw new Error(errData.detail || `/gmail/sync failed`);
   }
+
   return res.json();
 }
+
+// ---- Data / Graph / Chat Endpoints (Use standard API_BASE_URL) ----
 
 export async function fetchCascade(nodeId, depth = 2) {
   const res = await fetch(`${API_BASE_URL}/cascade/${encodeURIComponent(nodeId)}?depth=${depth}`, {
