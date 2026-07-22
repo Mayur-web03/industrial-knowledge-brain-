@@ -1,5 +1,4 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-// syncGmail ko import list me include kar diya hai
 import { uploadFiles, fetchDocuments, deleteDocument, syncGmail } from "../api";
 
 function formatDate(iso) {
@@ -42,7 +41,6 @@ export default function DocumentsView() {
     }
   }, []);
 
-  // API utility ka use karke documents load ho rhe hain
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
@@ -52,7 +50,6 @@ export default function DocumentsView() {
     try {
       await syncGmail();
       alert("Gmail synced successfully!");
-      // Document list refresh karke naye synced docs fetch karo
       await loadDocuments();
     } catch (err) {
       console.error("Sync error:", err);
@@ -121,7 +118,7 @@ export default function DocumentsView() {
 
   return (
     <div className="view documents-view">
-      <div className="view-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="view-header flex-between">
         <div>
           <h2>Documents</h2>
           <p className="view-subtitle">Add manuals, procedures, or reports to the knowledge base.</p>

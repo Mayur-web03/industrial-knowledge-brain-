@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { askBrain, checkHealth, fetchFlags } from "./api";
 import {
@@ -13,6 +13,7 @@ import Sidebar from "./components/Sidebar";
 import ChatView from "./components/ChatView";
 import DocumentsView from "./components/DocumentsView";
 import GraphView from "./components/GraphView";
+import FlaggedView from "./components/FlaggedView";
 import AuthGate from "./components/AuthGate";
 import Home from "./components/Home";
 
@@ -259,6 +260,7 @@ function MainApp({ token, industryName, onLogout }) {
         )}
         {view === "documents" && <DocumentsView />}
         {view === "graph" && <GraphView />}
+        {view === "flagged" && <FlaggedView />}
       </main>
     </div>
   );
@@ -276,7 +278,6 @@ function AppRoutes() {
       localStorage.setItem("ikb-token", data.token);
       localStorage.setItem("ikb-industry-code", data.industry_code);
       localStorage.setItem("ikb-industry-name", data.industry_name || "");
-      // Yeh line critical hai per-user chat isolation ke liye:
       localStorage.setItem("ikb-user-email", data.email || data.industry_code || "guest");
       setToken(data.token);
       setIndustryName(data.industry_name || "");

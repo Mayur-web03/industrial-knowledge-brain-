@@ -1,86 +1,158 @@
-import Truncate from "./Truncate";
+import { useEffect, useState } from "react";
+import { fetchDocuments } from "../api";
 
 export default function Sidebar({
-  view, setView, theme, toggleTheme, backendOnline, flagCount,
-  sessions, activeSessionId, onNewChat, onSwitchSession, onDeleteSession,
-  industryName, onLogout,
+  view,
+  setView,
+  theme,
+  toggleTheme,
+  backendOnline,
+  flagCount = 0,
+  sessions = [],
+  activeSessionId,
+  onNewChat,
+  onSwitchSession,
+  onDeleteSession,
+  industryName,
+  onLogout,
 }) {
-  const navItems = [
-    { id: "chat", label: "Chat", icon: "💬" },
-    { id: "graph", label: "Graph", icon: "🕸" },
-    { id: "documents", label: "Documents", icon: "📄" },
-  ];
+  const [docFlagCount, setDocFlagCount] = useState(0);
+
+  // Error ya flagged status waale documents count karne ke liye
+  useEffect(() => {
+    async function loadDocFlags() {
+      try {
+        const data = await fetchDocuments();
+        const count = (data.documents || []).filter(
+          (d) => d.status === "error" || d.flagged === true
+        ).length;
+        setDocFlagCount(count);
+      } catch (err) {
+        console.error("Failed to fetch document flags:", err);
+      }
+    }
+    loadDocFlags();
+  }, [view]); // Jab bhi tab switch ho, count refresh hoga
+
+  const totalFlaggedCount = flagCount + docFlagCount;
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-top">
-        <div className="brand">
-          <span className="brand-dot" />
-          <span className="brand-name">{industryName || "Industrial Nexus"}</span>
+      <div className="sidebar-header">
+        <div className="brand flex-center">
+          <span className="brand-icon">⚡</span>
+          <span className="brand-name">
+            {industryName ? `${industryName} Knowledge` : "Industrial IKB"}
+          </span>
+        </div>
+        <div
+          className={`status-indicator ${
+            backendOnline ? "online" : backendOnline === false ? "offline" : ""
+          }`}
+          title={
+            backendOnline
+              ? "Backend Online"
+              : backendOnline === false
+              ? "Backend Offline"
+              : "Checking Backend..."
+          }
+        />
+      </div>
+
+      <nav className="nav-menu">
+        <button
+          className={`nav-item ${view === "chat" ? "active" : ""}`}
+          onClick={() => setView("chat")}
+        >
+          <span className="nav-icon">💬</span>
+          <span>Chat</span>
+        </button>
+
+        <button
+          className={`nav-item ${view === "documents" ? "active" : ""}`}
+          onClick={() => setView("documents")}
+        >
+          <span className="nav-icon">📁</span>
+          <span>Documents</span>
+        </button>
+
+        <button
+          className={`nav-item ${view === "graph" ? "active" : ""}`}
+          onClick={() => setView("graph")}
+        >
+          <span className="nav-icon">🕸</span>
+          <span>Graph</span>
+        </button>
+
+        <button
+          className={`nav-item ${view === "flagged" ? "active" : ""}`}
+          onClick={() => setView("flagged")}
+        >
+          <span className="nav-icon">⚠</span>
+          <span>Flagged</span>
+          {totalFlaggedCount > 0 && (
+            <span className="nav-badge">{totalFlaggedCount}</span>
+          )}
+        </button>
+      </nav>
+
+      <div className="sidebar-divider" />
+
+      <div className="sidebar-section">
+        <div className="sidebar-section-header flex-between">
+          <span>Recent Chats</span>
+          <button
+            className="icon-btn"
+            onClick={onNewChat}
+            title="New Chat"
+          >
+            ➕
+          </button>
+        </div>
+
+        <div className="session-list">
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              className={`session-item ${
+                s.id === activeSessionId && view === "chat" ? "active" : ""
+              }`}
+              onClick={() => onSwitchSession(s.id)}
+            >
+              <span className="session-title">{s.title || "New Chat"}</span>
+              <button
+                className="session-delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteSession(s.id);
+                }}
+                title="Delete Chat"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      <nav className="sidebar-nav">
-        {navItems.map((item) => (
+      <div className="sidebar-footer">
+        <button
+          className="theme-toggle-btn"
+          onClick={toggleTheme}
+          title="Toggle Theme"
+        >
+          {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
+        </button>
+
+        {onLogout && (
           <button
-            key={item.id}
-            className={`nav-item ${view === item.id ? "active" : ""}`}
-            onClick={() => setView(item.id)}
+            className="logout-btn"
+            onClick={onLogout}
+            title="Log Out"
           >
-            <span className="nav-icon">{item.icon}</span>
-            <span>{item.label}</span>
-            {item.id === "chat" && flagCount > 0 && (
-              <span className="nav-badge">{flagCount}</span>
-            )}
+            🚪 Logout
           </button>
-        ))}
-      </nav>
-
-      {view === "chat" && (
-        <div className="chat-sessions">
-          <button className="new-chat-btn" onClick={onNewChat}>
-            <span className="new-chat-icon">+</span>
-            <span>New Chat</span>
-          </button>
-
-          <div className="session-list">
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className={`session-item ${s.id === activeSessionId ? "active" : ""}`}
-                onClick={() => onSwitchSession(s.id)}
-              >
-                <Truncate text={s.title} maxLength={26} className="session-title" />
-                <button
-                  className="session-delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteSession(s.id);
-                  }}
-                  aria-label="Delete chat"
-                  title="Delete chat"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="sidebar-bottom">
-        <button className="theme-toggle" onClick={toggleTheme}>
-          <span>{theme === "light" ? "🌙" : "☀️"}</span>
-          <span>{theme === "light" ? "Dark mode" : "Light mode"}</span>
-        </button>
-        <button className="theme-toggle" onClick={onLogout}>
-          <span>🚪</span>
-          <span>Logout</span>
-        </button>
-        <div className="backend-status">
-          <span className={`status-dot ${backendOnline === false ? "offline" : ""}`} />
-          <span>{backendOnline === false ? "Backend offline" : "Backend online"}</span>
-        </div>
+        )}
       </div>
     </aside>
   );
