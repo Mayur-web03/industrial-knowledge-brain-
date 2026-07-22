@@ -255,7 +255,17 @@ def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
 def health_check():
     return {"status": "ok", "message": "Industrial Nexus API is running"}
 
-
+@app.get("/debug/list-docs")
+def debug_list_docs():
+    base = "data/raw_docs"
+    result = {"cwd": os.getcwd(), "base_exists": os.path.exists(base)}
+    if os.path.exists(base):
+        result["industries"] = {}
+        for industry in os.listdir(base):
+            industry_path = os.path.join(base, industry)
+            if os.path.isdir(industry_path):
+                result["industries"][industry] = os.listdir(industry_path)
+    return result
 
 # ---------- Upload Endpoint (now industry-scoped via auth) ----------
 
