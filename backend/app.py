@@ -35,13 +35,17 @@ app = FastAPI(title="Industrial Nexus API")
 
 # ---------- FIXED CORS CONFIGURATION ----------
 # allow_credentials=True ke saath wildcard '*' invalid hota hai.
-# Isliye explicit Vercel URL aur localhost origins setup kiye hain.
+# Isliye explicit frontend origins yahan list karo — jitne bhi domains se
+# is backend ko call kiya ja raha hai, sab yahan hone chahiye.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://industrial-knowledge-brain.vercel.app",
         "https://industrial-knowledge-brain-git-main-mayur-web03s-projects.vercel.app",
         "http://localhost:5173",
+        "https://gmailpdfreader-production.up.railway.app",
+        # 👇 jo bhi actual URL browser address bar mein dikh raha hai jab tum
+        # app use kar rahe ho, wahi yahan hona chahiye — copy-paste karke daal do
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -252,7 +256,7 @@ def get_gmail_service():
             detail="Gmail token.json file is missing on server."
         )
     creds = Credentials.from_authorized_user_file(
-        token_path, 
+        token_path,
         ["https://www.googleapis.com/auth/gmail.readonly"]
     )
     return build("gmail", "v1", credentials=creds)
@@ -442,7 +446,7 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
 
     try:
         service = get_gmail_service()
-        
+
         query = "has:attachment filename:pdf"
         results = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
         messages = results.get("messages", [])
@@ -472,10 +476,10 @@ async def gmail_sync(user: dict = Depends(get_current_user)):
                     attachment = service.users().messages().attachments().get(
                         userId="me", messageId=msg_id, id=attachment_id
                     ).execute()
-                    
+
                     file_bytes = base64.urlsafe_b64decode(attachment["data"].encode("UTF-8"))
                     safe_filename = os.path.basename(filename)
-                    
+
                     dest_path = os.path.join(raw_docs_dir, safe_filename)
                     with open(dest_path, "wb") as f:
                         f.write(file_bytes)
