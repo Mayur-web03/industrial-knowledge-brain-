@@ -9,6 +9,7 @@ export default function Sidebar({
     { id: "chat", label: "Chat", icon: "💬" },
     { id: "graph", label: "Graph", icon: "🕸" },
     { id: "documents", label: "Documents", icon: "📄" },
+    { id: "flagged", label: "Flagged", icon: "⚠" },
   ];
 
   return (
@@ -29,7 +30,7 @@ export default function Sidebar({
           >
             <span className="nav-icon">{item.icon}</span>
             <span>{item.label}</span>
-            {item.id === "chat" && flagCount > 0 && (
+            {item.id === "flagged" && flagCount > 0 && (
               <span className="nav-badge">{flagCount}</span>
             )}
           </button>

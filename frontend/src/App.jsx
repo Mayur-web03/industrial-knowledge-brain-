@@ -13,6 +13,7 @@ import Sidebar from "./components/Sidebar";
 import ChatView from "./components/ChatView";
 import DocumentsView from "./components/DocumentsView";
 import GraphView from "./components/GraphView";
+import FlaggedView from "./components/FlaggedView";
 import AuthGate from "./components/AuthGate";
 import Home from "./components/Home";
 
@@ -259,6 +260,7 @@ function MainApp({ token, industryName, onLogout }) {
         )}
         {view === "documents" && <DocumentsView />}
         {view === "graph" && <GraphView />}
+        {view === "flagged" && <FlaggedView flags={flags} />}
       </main>
     </div>
   );
