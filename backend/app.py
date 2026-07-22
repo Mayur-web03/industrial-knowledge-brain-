@@ -256,6 +256,23 @@ def health_check():
     return {"status": "ok", "message": "Industrial Nexus API is running"}
 
 
+# ---------- TEMP DEBUG ENDPOINT — remove after use ----------
+@app.get("/debug/industries")
+def debug_industries():
+    from database import SessionLocal
+    from auth.models import Industry, User
+    db = SessionLocal()
+    try:
+        industries = db.query(Industry).all()
+        users = db.query(User).all()
+        return {
+            "industries": [{"industry_code": i.industry_code, "name": i.name} for i in industries],
+            "users": [{"email": u.email, "industry_id": u.industry_id} for u in users],
+        }
+    finally:
+        db.close()
+
+
 # ---------- Upload Endpoint (now industry-scoped via auth) ----------
 
 @app.post("/upload")
