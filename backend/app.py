@@ -255,43 +255,15 @@ def _remove_document_from_knowledge_graph(industry_code: str, filename: str):
 def health_check():
     return {"status": "ok", "message": "Industrial Nexus API is running"}
 
-@app.get("/debug/list-docs")
-def debug_list_docs():
-    base = "data/raw_docs"
-    result = {"cwd": os.getcwd(), "base_exists": os.path.exists(base)}
-    if os.path.exists(base):
-        result["industries"] = {}
-        for industry in os.listdir(base):
-            industry_path = os.path.join(base, industry)
-            if os.path.isdir(industry_path):
-                result["industries"][industry] = os.listdir(industry_path)
-    return result
-@app.get("/debug/tree")
-def debug_tree():
-    def walk(path, depth=0, max_depth=3):
-        if depth > max_depth:
-            return "..."
-        try:
-            items = {}
-            for entry in sorted(os.listdir(path)):
-                full = os.path.join(path, entry)
-                if os.path.isdir(full):
-                    items[entry + "/"] = walk(full, depth + 1, max_depth)
-                else:
-                    items[entry] = "file"
-            return items
-        except Exception as e:
-            return f"error: {e}"
-
-    return {"cwd": os.getcwd(), "tree": walk(os.getcwd())}
-# ---------- Upload Endpoint (now industry-scoped via auth) ----------
+# ---------- Upload Endpoint (Hackathon Bypass: Public access with fixed industry) ----------
 
 @app.post("/upload")
 async def upload_documents(
     files: List[UploadFile] = File(...),
-    user: dict = Depends(get_current_user),
 ):
-    industry_code = user["industry_code"]
+    # Fixed industry code hackathon ke liye (agar tera folder name 'IND001' na ho to yahan change kar lena)
+    industry_code = "IND001" 
+    
     raw_docs_dir = get_raw_docs_dir(industry_code)
     vector_store = get_vector_store_for_industry(industry_code)
 
@@ -333,7 +305,6 @@ async def upload_documents(
         _extend_knowledge_graph(industry_code, documents)
 
     return {"results": results}
-
 
 # ---------- Protected endpoints (industry-scoped) ----------
 
