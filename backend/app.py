@@ -38,7 +38,8 @@ app = FastAPI(title="Industrial Nexus API")
 # Isliye explicit Vercel URL aur localhost origins setup kiye hain.
 allowed_origins = [
     "https://industrial-knowledge-brain.vercel.app",
-    "http://localhost:5173",  # Local Vite Server
+    "https://industrial-knowledge-brain-git-main-mayur-web03s-projects.vercel.app",
+    "http://localhost:5173",
     "http://localhost:3000",
 ]
 
