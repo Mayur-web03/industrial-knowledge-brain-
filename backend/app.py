@@ -36,12 +36,13 @@ app = FastAPI(title="Industrial Nexus API")
 # ---------- FIXED CORS CONFIGURATION ----------
 # allow_credentials=True ke saath wildcard '*' invalid hota hai.
 # Isliye explicit Vercel URL aur localhost origins setup kiye hain.
-allowed_origins = [
-    "https://industrial-knowledge-brain.vercel.app",
-    "https://industrial-knowledge-brain-git-main-mayur-web03s-projects.vercel.app",
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_middleware(
     CORSMiddleware,
